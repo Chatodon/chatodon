@@ -96,7 +96,7 @@ services:
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
-      DJANGO_ALLOWED_HOSTS: "${DOMAIN},localhost"
+      DJANGO_ALLOWED_HOSTS: "${DOMAIN},localhost,backend"
       DJANGO_LANGUAGE_CODE: ${DJANGO_LANGUAGE_CODE:-en-us}
       DJANGO_TIME_ZONE: ${DJANGO_TIME_ZONE:-UTC}
       DJANGO_CORS_ALLOWED_ORIGINS: "http://${DOMAIN}"
