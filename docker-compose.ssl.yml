@@ -1,0 +1,53 @@
+services:
+
+  traefik:
+    ports:
+      - "${TRAEFIK_HOST:-0.0.0.0}:${HTTPS_PORT:-443}:443"
+    command:
+      - "--log.level=INFO"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--providers.docker.network=chatodon_net"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+
+  backend:
+    environment:
+      DJANGO_CORS_ALLOWED_ORIGINS: "https://${DOMAIN}"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "https://${DOMAIN}"
+
+  nginx:
+    labels:
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.routers.backend.rule=Host(`${DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/admin`) || PathPrefix(`/static`))"
+      - "traefik.http.routers.backend-secure.entrypoints=websecure"
+      - "traefik.http.routers.backend-secure.rule=Host(`${DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/admin`) || PathPrefix(`/static`))"
+      - "traefik.http.routers.backend-secure.tls=true"
+      - "traefik.http.routers.backend-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.backend-secure.middlewares=backend-strip"
+      - "traefik.http.routers.backend-secure.service=backend"
+
+  ws-gateway:
+    labels:
+      - "traefik.http.routers.ws-secure.entrypoints=websecure"
+      - "traefik.http.routers.ws-secure.rule=Host(`${DOMAIN}`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.ws-secure.tls=true"
+      - "traefik.http.routers.ws-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.ws-secure.service=ws"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NUXT_PUBLIC_WS_URL: "wss://${DOMAIN}/ws"
+    labels:
+      - "traefik.http.routers.frontend-secure.entrypoints=websecure"
+      - "traefik.http.routers.frontend-secure.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.frontend-secure.tls=true"
+      - "traefik.http.routers.frontend-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-secure.service=frontend"

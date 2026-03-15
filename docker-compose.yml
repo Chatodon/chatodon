@@ -1,0 +1,193 @@
+services:
+
+  # Reverse proxy
+  traefik:
+    image: traefik:v3.6
+    restart: unless-stopped
+    ports:
+      - "${TRAEFIK_HOST:-0.0.0.0}:${HTTP_PORT:-80}:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_certs:/letsencrypt
+    networks:
+      - chatodon_net
+    command:
+      - "--log.level=INFO"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--providers.docker.network=chatodon_net"
+      - "--entrypoints.web.address=:80"
+
+  # PostgreSQL
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-chatodon}
+      POSTGRES_USER: ${POSTGRES_USER:-chatodon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - chatodon_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chatodon} -d ${POSTGRES_DB:-chatodon}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - chatodon_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Runs migrations and collectstatic once before backend starts
+  backend-migrate:
+    build:
+      context: ./backend
+    restart: no
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: "localhost"
+      DJANGO_CORS_ALLOWED_ORIGINS: "http://localhost"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "http://localhost"
+      POSTGRES_DB: ${POSTGRES_DB:-chatodon}
+      POSTGRES_USER: ${POSTGRES_USER:-chatodon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - backend_static:/app/staticfiles
+    networks:
+      - chatodon_net
+    command: >
+      sh -c "uv run python manage.py migrate --noinput &&
+             uv run python manage.py collectstatic --noinput"
+
+  # Django backend
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend-migrate:
+        condition: service_completed_successfully
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: "${DOMAIN},localhost"
+      DJANGO_LANGUAGE_CODE: ${DJANGO_LANGUAGE_CODE:-en-us}
+      DJANGO_TIME_ZONE: ${DJANGO_TIME_ZONE:-UTC}
+      DJANGO_CORS_ALLOWED_ORIGINS: "http://${DOMAIN}"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "http://${DOMAIN}"
+      POSTGRES_DB: ${POSTGRES_DB:-chatodon}
+      POSTGRES_USER: ${POSTGRES_USER:-chatodon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - backend_media:/app/protected_media
+      - backend_static:/app/staticfiles
+    networks:
+      - chatodon_net
+
+  # Nginx - serves static files, proxies everything else to Django
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - ./deploy/backend.conf:/etc/nginx/conf.d/default.conf:ro
+      - backend_static:/app/staticfiles:ro
+      - backend_media:/app/protected_media:ro
+    networks:
+      - chatodon_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.routers.backend.rule=Host(`${DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/admin`) || PathPrefix(`/static`))"
+      - "traefik.http.routers.backend.middlewares=backend-strip"
+      - "traefik.http.routers.backend.service=backend"
+      - "traefik.http.middlewares.backend-strip.stripprefix.prefixes=/api"
+      - "traefik.http.services.backend.loadbalancer.server.port=80"
+
+  # WebSocket gateway
+  ws-gateway:
+    build:
+      context: ./ws-gateway
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8000"
+      REDIS_URL: redis://redis:6379
+      DJANGO_AUTH_URL: http://backend:8000/account/me/
+      DJANGO_MY_ROOM_URL: http://backend:8000/rooms/my/
+    networks:
+      - chatodon_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ws.entrypoints=web"
+      - "traefik.http.routers.ws.rule=Host(`${DOMAIN}`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.ws.service=ws"
+      - "traefik.http.services.ws.loadbalancer.server.port=8000"
+
+  # Nuxt frontend
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NUXT_PUBLIC_WS_URL: "ws://${DOMAIN}/ws"
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - chatodon_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.frontend.service=frontend"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_media:
+  backend_static:
+  traefik_certs:
+
+networks:
+  chatodon_net:
+    name: chatodon_net
+    driver: bridge
