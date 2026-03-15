@@ -4,7 +4,7 @@ const getUsername = (room: Room): string => {
   if (room.isPrivate) {
     return ''
   }
-  return room.username
+  return room.username || ''
 }
 
 export default {

@@ -1,7 +1,20 @@
 <template>
-  <UForm :schema="schema" :state="state" class="space-y-4 w-64" @submit="onSubmit">
-    <UFormField name="avatar" label="Avatar" description="JPG, GIF or PNG. 1MB Max.">
-      <UFileUpload v-slot="{ open, removeFile }" v-model="state.avatar" accept="image/*">
+  <UForm
+    :schema="schema"
+    :state="state"
+    class="space-y-4 w-64"
+    @submit="onSubmit"
+  >
+    <UFormField
+      name="avatar"
+      label="Avatar"
+      description="JPG, GIF or PNG. 1MB Max."
+    >
+      <UFileUpload
+        v-slot="{ open, removeFile }"
+        v-model="state.avatar"
+        accept="image/*"
+      >
         <div class="flex flex-wrap items-center gap-3">
           <UAvatar
             size="lg"
@@ -17,7 +30,10 @@
           />
         </div>
 
-        <p v-if="state.avatar" class="text-xs text-muted mt-1.5">
+        <p
+          v-if="state.avatar"
+          class="text-xs text-muted mt-1.5"
+        >
           {{ state.avatar.name }}
 
           <UButton
@@ -32,7 +48,11 @@
       </UFileUpload>
     </UFormField>
 
-    <UButton type="submit" label="Submit" color="neutral" />
+    <UButton
+      type="submit"
+      label="Submit"
+      color="neutral"
+    />
   </UForm>
 </template>
 
@@ -59,14 +79,14 @@ const schema = z.object({
     .instanceof(File, {
       message: 'Please select an image file.'
     })
-    .refine((file) => file.size <= MAX_FILE_SIZE, {
+    .refine(file => file.size <= MAX_FILE_SIZE, {
       message: `The image is too large. Please choose an image smaller than ${formatBytes(MAX_FILE_SIZE)}.`
     })
-    .refine((file) => ACCEPTED_IMAGE_TYPES.includes(file.type), {
+    .refine(file => ACCEPTED_IMAGE_TYPES.includes(file.type), {
       message: 'Please upload a valid image file (JPEG, PNG, or WebP).'
     })
     .refine(
-      (file) =>
+      file =>
         new Promise((resolve) => {
           const reader = new FileReader()
           reader.onload = (e) => {
