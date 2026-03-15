@@ -14,12 +14,12 @@ class RoomAdmin(admin.ModelAdmin):
         "username",
         "owner",
         "participants_count",
-        "is_private",
+        "is_public",
         "room_type",
         "is_active",
         "created_at",
     )
-    list_filter = ("is_private", "room_type", "is_active", "created_at")
+    list_filter = ("is_public", "room_type", "is_active", "created_at")
     search_fields = ("name", "username", "owner__username")
     readonly_fields = (
         "participants_count",

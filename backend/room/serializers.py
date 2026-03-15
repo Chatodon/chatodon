@@ -71,7 +71,11 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Room
-        fields = ["name", "description", "avatar", "room_type", "is_active"]
+        fields = ["name", "username", "description", "avatar", "room_type", "is_public", "is_active"]
+        extra_kwargs = {
+            "username": {"required": False, "allow_null": True},
+            "description": {"required": False, "allow_null": True},
+        }
 
     def validate_name(self, value):
         if not value.strip():
@@ -79,11 +83,19 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_description(self, value):
-        if value and len(value) > 1024:
+        if value is None:
+            return ""
+        if len(value) > 1024:
             raise serializers.ValidationError("The maximum description length is 1024")
         return value
 
     def validate(self, attrs):
+        is_public = attrs.get("is_public", getattr(self.instance, "is_public", False))
+        username = attrs.get("username")
+        if not is_public and username:
+            raise serializers.ValidationError(
+                {"username": "Non-public rooms cannot have a username."}
+            )
         return attrs
 
 

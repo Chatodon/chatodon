@@ -15,7 +15,9 @@ class Room(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     name = models.CharField(max_length=255)
-    username = models.CharField(max_length=32, unique=True, validators=[username_validator])
+    username = models.CharField(
+        max_length=32, unique=True, null=True, blank=True, validators=[username_validator]
+    )
     description = models.TextField(blank=True)
 
     avatar = models.ImageField(upload_to="room_avatars/", blank=True, null=True)
@@ -23,7 +25,7 @@ class Room(models.Model):
     room_type = models.CharField(
         max_length=20, choices=RoomType.choices, default=RoomType.PRIVATE, db_index=True
     )
-    is_private = models.BooleanField(default=True)
+    is_public = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
     owner = models.ForeignKey(
@@ -46,7 +48,7 @@ class Room(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        if not self.username:
+        if self.is_public and not self.username:
             self.username = str(uuid.uuid4())[:32]
         super().save(*args, **kwargs)
 

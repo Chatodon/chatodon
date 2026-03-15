@@ -174,7 +174,7 @@ const profileForm = reactive({
   username: '',
   name: '',
   email: null as string | null,
-  bio: null as string | null
+  bio: ''
 })
 
 const avatarFile = ref<File | null>(null)
@@ -186,7 +186,7 @@ watchEffect(() => {
   profileForm.username = user.value.username
   profileForm.name = user.value.name
   profileForm.email = user.value.email
-  profileForm.bio = user.value.bio
+  profileForm.bio = user.value.bio ?? ''
 
   avatarPreview.value = user.value.avatar ?? undefined
 

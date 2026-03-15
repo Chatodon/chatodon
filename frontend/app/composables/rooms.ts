@@ -2,6 +2,14 @@ import { useRoomsStore } from '~/stores/rooms'
 import type { PaginatedResponse } from '~/types/api'
 import type { Room, Rooms } from '~/types/rooms'
 
+interface CreateRoomPayload {
+  name: string
+  description?: string | null
+  username?: string | null
+  roomType: 'private' | 'group' | 'channel'
+  isPublic: boolean
+}
+
 export const useRooms = () => {
   const toast = useToast()
   const api = useApi()
@@ -46,6 +54,17 @@ export const useRooms = () => {
     }
   }
 
+  const createRoom = async (payload: CreateRoomPayload): Promise<Room | null> => {
+    const res = await api.post('/rooms/create/', payload)
+    if (res?.ok) {
+      const room = res.data as Room
+      roomsStore.rooms = [room, ...roomsStore.rooms]
+      return room
+    }
+    toast.add({ title: 'Failed to create the room', color: 'error' })
+    return null
+  }
+
   const sortRooms = () => {
     roomsStore.rooms.sort((a, b) => Number(new Date(b.updatedAt)) - Number(new Date(a.updatedAt)))
   }
@@ -57,6 +76,7 @@ export const useRooms = () => {
 
     fetchRooms,
     updateRoom,
-    setCurrentRoom
+    setCurrentRoom,
+    createRoom
   }
 }

@@ -1,7 +1,18 @@
 <template>
+  <div class="h-full flex flex-col">
+  <div class="p-2">
+    <UButton
+      icon="i-lucide-plus"
+      block
+      variant="soft"
+      @click="overlaysStore.createRoom = true"
+    >
+      New room
+    </UButton>
+  </div>
   <div
     ref="scrollContainer"
-    class="h-full overflow-y-auto"
+    class="flex-1 overflow-y-auto"
     @scroll="onScroll"
   >
     <template v-if="rooms.length">
@@ -39,6 +50,7 @@
       v-else
       title="No rooms found"
     />
+  </div>
   </div>
 </template>
 

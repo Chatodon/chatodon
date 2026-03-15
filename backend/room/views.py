@@ -1,4 +1,5 @@
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, status
+from rest_framework.response import Response
 
 from .models import Room, RoomMember
 from .pagination import RoomPagination
@@ -31,7 +32,7 @@ class PublicRoomListView(generics.ListAPIView):
 
     def get_queryset(self):
         return Room.objects.filter(
-            is_private=False, room_type__in=["group", "channel"], is_active=True
+            is_public=True, room_type__in=["group", "channel"], is_active=True
         ).order_by("-updated_at")
 
 
@@ -40,10 +41,13 @@ class RoomCreateView(generics.CreateAPIView):
     serializer_class = RoomCreateUpdateSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def perform_create(self, serializer):
-        room = serializer.save(owner=self.request.user)
-        RoomMember.objects.create(room=room, user=self.request.user, role="owner")
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        room = serializer.save(owner=request.user)
+        RoomMember.objects.create(room=room, user=request.user, role="owner")
         room.save()
+        return Response(RoomSerializer(room).data, status=status.HTTP_201_CREATED)
 
 
 # Update room

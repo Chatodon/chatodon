@@ -6,10 +6,13 @@ export const useOverlaysStore = defineStore('Overlays', () => {
   const rawMessage = ref<boolean>(false)
   const rawMessageContent = ref<unknown>()
 
+  const createRoom = ref<boolean>(false)
+
   return {
     userSettings,
     sidebar,
     rawMessage,
-    rawMessageContent
+    rawMessageContent,
+    createRoom
   }
 })
