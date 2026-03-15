@@ -40,7 +40,7 @@ export default defineNuxtPlugin(() => {
     console.debug('Socket:', socket)
 
     socket.onmessage = (event) => {
-      const data = camelizeKeys(JSON.parse(event.data)) as WsCreatedMessage
+      const data = JSON.parse(event.data) as WsCreatedMessage
       messageReceived.emit(data.message)
 
       switch (data.type) {

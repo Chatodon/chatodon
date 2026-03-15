@@ -1,8 +1,4 @@
-import { camelizeKeys, snakifyKeys } from '~/utils/case'
-
 export interface ApiResponse extends Response {
-  jsonCamel<T = unknown>(): Promise<T | unknown>
-  jsonSnake<T = unknown>(): Promise<T | unknown>
   data: unknown
 }
 
@@ -28,16 +24,8 @@ export const useApi = () => {
     if (csrf) headers.set('X-CSRFToken', csrf)
     const isFormData = options.body instanceof FormData
 
-    // outgoing snake_case
-    let body = options.body
-    if (body && !isFormData && typeof body === 'string') {
-      try {
-        const parsed = JSON.parse(body)
-        body = JSON.stringify(snakifyKeys(parsed))
-        headers.set('Content-Type', 'application/json')
-      } catch {
-        // pass
-      }
+    if (!isFormData && options.body && typeof options.body === 'string') {
+      headers.set('Content-Type', 'application/json')
     }
 
     try {
@@ -47,20 +35,10 @@ export const useApi = () => {
         credentials: 'include'
       })
 
-      // proxy Response
       const apiRes = res as ApiResponse
 
-      apiRes.jsonSnake = async (): Promise<unknown> => {
-        return res.clone().json()
-      }
-
-      apiRes.jsonCamel = async (): Promise<unknown> => {
-        const data = await res.clone().json()
-        return camelizeKeys(data)
-      }
-
       if (apiRes.headers.get('content-type')?.includes('application/json')) {
-        apiRes.data = await apiRes.jsonCamel()
+        apiRes.data = await res.clone().json()
       }
 
       return apiRes
